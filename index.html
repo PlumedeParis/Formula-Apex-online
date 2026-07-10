@@ -167,6 +167,12 @@ body.mp #split{display:block}
 .chatPanel{width:220px;max-height:230px;background:#0a0c12ee;border:1px solid var(--line);
   border-radius:10px;padding:8px;display:flex;flex-direction:column;pointer-events:auto}
 .chatPanel .chatMsgs{max-height:150px}
+.codeToggle{display:flex;align-items:center;justify-content:space-between;width:100%;
+  background:none;border:none;border-top:1px solid var(--line);padding:12px 2px 8px;
+  margin-top:10px;color:var(--mut);font-size:10px;font-weight:700;letter-spacing:.14em;cursor:pointer}
+.codeToggle .arrow{font-size:13px;transition:transform .2s;color:var(--mut)}
+.codeToggle.open .arrow{transform:rotate(90deg)}
+.manualCodeBox{margin-top:4px}
 .netLbl{font-size:10px;letter-spacing:.14em;color:var(--mut);font-weight:700;display:block;margin-top:10px}
 .netHelp{font-size:11px;color:var(--mut);margin:10px 0 0;line-height:1.5}
 #netStatus{margin-top:10px;font-size:12px;font-weight:700;color:var(--yel)}
@@ -289,18 +295,22 @@ body.noTouch #kbHint{display:block}
         </div>
       </div>
 
-      <p class="netHelp">— ou par code, sans passer par le salon —</p>
-      <div style="display:flex;gap:8px">
-        <button class="obtn" id="hostBtn" style="margin-top:0">CRÉER UNE PARTIE</button>
-        <button class="obtn" id="joinBtn" style="margin-top:0">REJOINDRE</button>
+      <button type="button" id="codeToggleBtn" class="codeToggle" aria-expanded="false">
+        <span>OU PAR CODE, SANS PASSER PAR LE SALON</span><i class="arrow">▸</i>
+      </button>
+      <div id="manualCodeBox" class="manualCodeBox" hidden>
+        <div style="display:flex;gap:8px">
+          <button class="obtn" id="hostBtn" style="margin-top:0">CRÉER UNE PARTIE</button>
+          <button class="obtn" id="joinBtn" style="margin-top:0">REJOINDRE</button>
+        </div>
+        <p class="netHelp">Duel 1 contre 1 en pair-à-pair, sans serveur : échangez les codes ci-dessous par message (WhatsApp, Discord…). L'hôte choisit le circuit et les tours ; la difficulté et les adversaires IA ne s'appliquent pas en ligne.</p>
+        <label class="netLbl">TON CODE — envoie-le à l'autre joueur</label>
+        <textarea id="myCode" readonly placeholder="Clique sur CRÉER UNE PARTIE (hôte), ou sur REJOINDRE puis colle le code reçu ci-dessous."></textarea>
+        <button class="obtn" id="copyCode">COPIER MON CODE</button>
+        <label class="netLbl">CODE REÇU</label>
+        <textarea id="theirCode" placeholder="Colle ici le code de l'autre joueur"></textarea>
+        <button class="obtn prim" id="applyCode">VALIDER LE CODE REÇU</button>
       </div>
-      <p class="netHelp">Duel 1 contre 1 en pair-à-pair, sans serveur : échangez les codes ci-dessous par message (WhatsApp, Discord…). L'hôte choisit le circuit et les tours ; la difficulté et les adversaires IA ne s'appliquent pas en ligne.</p>
-      <label class="netLbl">TON CODE — envoie-le à l'autre joueur</label>
-      <textarea id="myCode" readonly placeholder="Clique sur CRÉER UNE PARTIE (hôte), ou sur REJOINDRE puis colle le code reçu ci-dessous."></textarea>
-      <button class="obtn" id="copyCode">COPIER MON CODE</button>
-      <label class="netLbl">CODE REÇU</label>
-      <textarea id="theirCode" placeholder="Colle ici le code de l'autre joueur"></textarea>
-      <button class="obtn prim" id="applyCode">VALIDER LE CODE REÇU</button>
       <div id="netStatus">Hors ligne.</div>
 
       <div id="chatBox" class="chatBox" hidden>
@@ -2279,6 +2289,12 @@ function buildMenu(){
     chatOpen=!chatOpen;
     $('chatPanel').hidden=!chatOpen;
     if(chatOpen){ chatUnread=0; updateChatBadge(); $('chatInputRace').focus(); }
+  };
+  $('codeToggleBtn').onclick=()=>{
+    const box=$('manualCodeBox');
+    box.hidden=!box.hidden;
+    $('codeToggleBtn').classList.toggle('open',!box.hidden);
+    $('codeToggleBtn').setAttribute('aria-expanded',String(!box.hidden));
   };
   $('hostBtn').onclick=()=>{initAudio();hostGame();};
   $('joinBtn').onclick=()=>{
