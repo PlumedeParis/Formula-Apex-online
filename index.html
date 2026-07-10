@@ -1276,6 +1276,7 @@ function spawnCars(){
     };
     cm.g.position.set(car.pos.x,0.12,car.pos.z);
     cm.g.rotation.y=car.heading;
+    if(!isP) cm.g.add(makeNameplate(car.name));
     scene.add(cm.g);
     cars.push(car);
     if(isP){ if(isP1){player=car;players[0]=car;} else players[1]=car; }
@@ -1397,6 +1398,10 @@ function physAI(car,dt){
   if(car.ovCd>0)car.ovCd-=dt;
   if(car.blkCd>0)car.blkCd-=dt;
 
+  // distance (en indices piste) jusqu'à l'entrée de la voie des stands — utilisée
+  // à la fois pour s'y rabattre franchement et pour freiner à l'approche.
+  const dIdxPit=(PIT_A+6-car.idx+N)%N;
+
   if(!car.pitting){
     // ---- ATTAQUE : dépasser la voiture devant si nettement plus rapide ----
     if(car.ovT>0){
@@ -1421,6 +1426,13 @@ function physAI(car,dt){
         car.blkT=0.7+rand(0,0.7); car.blkCd=rand(3,6.5);
       }
     }
+  }else if(car.idx>=PIT_A&&car.idx<=PIT_B){
+    // ---- STAND : déjà dans la voie des stands, on y reste jusqu'à l'arrêt complet ----
+    laneT=5.3;
+  }else if(dIdxPit<100){
+    // ---- STAND : approche — se rabattre franchement, jamais laissé au hasard du vent latéral ----
+    const mergeT=clamp(1-dIdxPit/70,0,1);
+    laneT=lerp(laneT,5.3,mergeT);
   }
   car.lane=lerp(car.lane,laneT,Math.min(1,1.6*dt));
 
@@ -1445,7 +1457,6 @@ function physAI(car,dt){
   }
 
   if(car.pitting){
-    const dIdxPit=(PIT_A+6-car.idx+N)%N;
     if(dIdxPit<110) target=Math.min(target,7+dIdxPit*0.3);
     if(car.idx>=PIT_A&&car.idx<=PIT_B&&car.lat>3.0){
       target=0;
