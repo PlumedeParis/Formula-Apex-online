@@ -16,6 +16,7 @@ Jeu de course de Formule 1 en 3D, jouable directement dans le navigateur. 10 éc
 - Manette, clavier (ZQSD/flèches), volant tactile ou flèches tactiles selon l'appareil
 - Chat texte et vocal en multijoueur en ligne
 - **PWA installable** — fonctionne hors ligne une fois chargé une première fois
+- 🎬 **Mode « Cinématique » (caché)** — un mode réalisateur pensé pour filmer des vidéos : zéro voiture jouable, les 10 écuries se disputent la course entre elles, et la caméra suit celle de ton choix. Débloque-le en tapant 7 fois sur le badge de version (coin haut droit du menu) pour faire apparaître le chip correspondant dans les modes de jeu. Pendant la course : ⏮/⏭ (ou les flèches ←/→) pour changer de voiture suivie, C/V pour changer d'angle de caméra.
 
 ## Jouer
 
