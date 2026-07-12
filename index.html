@@ -360,6 +360,8 @@ body.cine #touchL2,body.cine #touchR2{display:none}
 #flagTxt{position:absolute;top:22%;left:50%;transform:translateX(-50%);
   font-family:'Racing Sans One',sans-serif;font-style:italic;font-size:34px;
   text-shadow:0 4px 12px #000;white-space:nowrap}
+#lightningFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;
+  transition:opacity .12s ease-out;z-index:5}
 #touchL{position:absolute;left:12px;bottom:14px;display:flex;gap:10px}
 #touchR{position:absolute;right:12px;bottom:14px;display:flex;gap:10px;align-items:flex-end}
 #touchL button,#touchR button{
@@ -417,7 +419,7 @@ body.noTouch #kbHint{display:block}
 <div id="menu">
   <canvas id="menuBg"></canvas>
   <div id="menuVignette"></div>
-  <div id="verBadge" title="Version">v1.7 · 12/07/2026</div>
+  <div id="verBadge" title="Version">v1.8 · 12/07/2026</div>
   <div class="wrap">
     <div class="hero">
       <div class="season">26</div>
@@ -514,6 +516,27 @@ body.noTouch #kbHint{display:block}
     <div id="diffRow" class="chips"></div>
     </div>
 
+    <div id="weatherBlk">
+    <div class="secHead"><span class="lbl">MÉTÉO</span><span id="weatherName" class="val"></span></div>
+    <div class="chips">
+      <button class="chip" id="wSunChip">☀️&nbsp;SOLEIL</button>
+      <button class="chip" id="wRainChip">🌧️&nbsp;PLUIE</button>
+      <button class="chip" id="wStormChip">⛈️&nbsp;ORAGE</button>
+      <button class="chip" id="wSnowChip">❄️&nbsp;NEIGE</button>
+      <button class="chip" id="wRandomChip">🎲&nbsp;ALÉATOIRE</button>
+    </div>
+    <div id="weatherHint" class="hint" style="margin-top:6px;text-align:left"></div>
+    </div>
+
+    <div id="todBlk">
+    <div class="secHead"><span class="lbl">HEURE</span><span id="todName" class="val"></span></div>
+    <div class="chips">
+      <button class="chip" id="todMorningChip">🌅&nbsp;MATIN</button>
+      <button class="chip" id="todDayChip">🏙️&nbsp;JOURNÉE</button>
+      <button class="chip" id="todNightChip">🌙&nbsp;NUIT</button>
+    </div>
+    </div>
+
     <div id="ctrlBlk">
     <div class="secHead"><span class="lbl">COMMANDES</span><span id="ctrlName" class="val"></span></div>
     <div class="chips">
@@ -577,6 +600,7 @@ body.noTouch #kbHint{display:block}
     <div id="goTxt" hidden>GO&nbsp;!</div>
     <div id="flagTxt" hidden>🏁 DRAPEAU À DAMIER</div>
     <div id="camToast" hidden></div>
+    <div id="lightningFlash"></div>
     <div id="touchL"><button id="btnL">⟵</button><button id="btnR">⟶</button></div>
     <div id="touchWheel"><div id="wheelDial"><i></i></div></div>
     <div id="touchR"><button id="btnBrk">FREIN</button><button id="btnGas">GAZ</button></div>
@@ -708,6 +732,41 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
 const hash=i=>{const s=Math.sin(i*12.9898)*43758.5453;return s-Math.floor(s);};
 const wrapPI=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
+function lerpHex(a,b,t){
+  const pa=parseInt(String(a).replace('#',''),16)||0, pb=parseInt(String(b).replace('#',''),16)||0;
+  const ar=(pa>>16)&255, ag=(pa>>8)&255, ab=pa&255;
+  const br=(pb>>16)&255, bg=(pb>>8)&255, bb=pb&255;
+  const r=Math.round(lerp(ar,br,t)), g=Math.round(lerp(ag,bg,t)), b2=Math.round(lerp(ab,bb,t));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b2).toString(16).slice(1);
+}
+// heure choisie : "journée" = thème du circuit inchangé ; matin/nuit dérivent ses
+// couleurs (sol/vibreurs/eau restent ceux du circuit, seuls ciel/soleil changent).
+function applyTimeOfDay(th,tod){
+  if(tod==='morning'){
+    return Object.assign({},th,{
+      sunC: lerpHex(th.sunC,'#ff9d52',0.5), sunI: th.sunI*0.78,
+      skyTop: lerpHex(th.skyTop,'#ffb877',0.4), skyBot: lerpHex(th.skyBot,'#ffe0b0',0.45),
+      fog: lerpHex(th.fog,'#ffdcae',0.45),
+    });
+  }
+  if(tod==='night'){
+    return Object.assign({},th,{
+      night:true,
+      sunC: lerpHex(th.sunC,'#c3d2ff',0.7), sunI: Math.max(0.32,th.sunI*0.32),
+      skyTop: lerpHex(th.skyTop,'#04060f',0.85), skyBot: lerpHex(th.skyBot,'#141a34',0.78),
+      fog: lerpHex(th.fog,'#0b0e1e',0.8),
+    });
+  }
+  return th; // 'day' — thème d'origine du circuit, inchangé
+}
+function applyWeather(th,w){
+  const d=WEATHER_DEFS[w];
+  if(!d||!d.tint) return th;
+  return Object.assign({},th,{
+    skyTop: lerpHex(th.skyTop,d.tint,d.tintAmt), skyBot: lerpHex(th.skyBot,d.tint,d.tintAmt*0.8),
+    fog: lerpHex(th.fog,d.tint,d.tintAmt*0.9), sunI: th.sunI*(1-d.tintAmt*0.55),
+  });
+}
 function fmt(ms){ if(ms==null||!isFinite(ms)) return '—';
   const m=Math.floor(ms/60000), s=Math.floor(ms%60000/1000), d=Math.floor(ms%1000/100);
   return m+':'+String(s).padStart(2,'0')+'.'+d; }
@@ -790,7 +849,8 @@ function disposeWorld(){
     if(o.material){ const ms=Array.isArray(o.material)?o.material:[o.material];
       ms.forEach(m=>{ if(m.map)m.map.dispose(); if(m.emissiveMap)m.emissiveMap.dispose(); if(m.envMap)m.envMap.dispose(); m.dispose(); }); }
   });
-  scene=null; world=null;
+  scene=null; world=null; weatherFX=null; lightningT=0; lightningCd=rand(3.5,7);
+  const fl=$('lightningFlash'); if(fl)fl.style.opacity=0;
 }
 
 /* ---------- ruban (route, vibreurs, murs) ---------- */
@@ -1309,13 +1369,22 @@ let state='menu', lapsTotal=3, raceT0=0, countT=0, goT=0, flagT=0;
 let camMode=0; const CAMS=['POURSUITE','COCKPIT','CAMÉRA TV','AÉRIENNE'];
 let startMats=null, anim=null, td=null, trackCur=null, prevState='race';
 let tvSpots=[], mini={};
-let worldSun=null, worldEnv=null, AIC=0.9;
+let worldSun=null, worldEnv=null, AIC=0.9, weatherFX=null, lightningT=0, lightningCd=4;
 const sunDir=new THREE.Vector3(0,1,0);
 const isTouch=('ontouchstart' in window);
 const gfx={shadows:!isTouch, hq:true, bright:1};
 const DIFFS=[{n:'FACILE',mul:0.90},{n:'NORMAL',mul:0.97},{n:'DIFFICILE',mul:1.03},{n:'IMPOSSIBLE',mul:1.10}];
 const camPos=new THREE.Vector3(), camPos2=new THREE.Vector3(), camLook=new THREE.Vector3();
-const sel={track:0,team:0,laps:3,opp:9,diff:1,mp:false,net:false,netMode:'p2p',ctrl:'arrows',cine:false};
+const sel={track:0,team:0,laps:3,opp:9,diff:1,mp:false,net:false,netMode:'p2p',ctrl:'arrows',cine:false,weather:'sun',tod:'day'};
+/* ---------- météo & heure : conditions de course ---------- */
+const WEATHER_DEFS={
+  sun:  {icon:'☀️', label:'SOLEIL', grip:1.00, fogMul:1.0,  tint:null,      tintAmt:0},
+  rain: {icon:'🌧️', label:'PLUIE',  grip:0.80, fogMul:0.68, tint:'#7c8aa0', tintAmt:0.40},
+  storm:{icon:'⛈️', label:'ORAGE',  grip:0.74, fogMul:0.46, tint:'#454c5e', tintAmt:0.62},
+  snow: {icon:'❄️', label:'NEIGE',  grip:0.58, fogMul:0.6,  tint:'#e7edf5', tintAmt:0.50},
+};
+const WEATHER_ORDER=['sun','rain','storm','snow'];
+let weather='sun', weatherGrip=1, timeOfDay='day', pendingWeather=null;
 const input={gas:false,brk:false,left:false,right:false,axis:null};
 const input2={gas:false,brk:false,left:false,right:false,axis:null};
 
@@ -1326,13 +1395,54 @@ const hudEls={};
 
 function yawMax(sp){ return 2.3*Math.min(sp/16,1)*(1.15-0.55*sp/TOP); }
 
+/* ---------- effets météo (pluie/neige qui tombe, éclairs d'orage) ---------- */
+function buildWeatherFX(w){
+  if(w==='sun') return null;
+  const isSnow=w==='snow';
+  const count=isSnow?600:1100;
+  const box=130, top=90;
+  const positions=new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    positions[i*3]=rand(-box,box); positions[i*3+1]=rand(0,top); positions[i*3+2]=rand(-box,box);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  const mat=new THREE.PointsMaterial({
+    color:isSnow?0xffffff:0xaac0e0, size:isSnow?0.55:0.16,
+    transparent:true, opacity:isSnow?0.85:0.5, depthWrite:false,
+  });
+  const pts=new THREE.Points(geo,mat);
+  scene.add(pts);
+  return {pts,geo,box,top,kind:w,fall:isSnow?8.5:(w==='storm'?48:34),drift:isSnow?1.2:7};
+}
+function updateWeatherFX(dt,followCar){
+  if(!weatherFX||!followCar)return;
+  weatherFX.pts.position.set(followCar.pos.x,0,followCar.pos.z);
+  const arr=weatherFX.geo.attributes.position.array;
+  const {box,top,fall,drift}=weatherFX;
+  for(let i=0;i<arr.length;i+=3){
+    arr[i+1]-=fall*dt; arr[i]-=drift*dt;
+    if(arr[i+1]<0||arr[i]<-box){ arr[i+1]=top; arr[i]=rand(-box,box); arr[i+2]=rand(-box,box); }
+  }
+  weatherFX.geo.attributes.position.needsUpdate=true;
+  if(weatherFX.kind==='storm'){
+    lightningCd-=dt;
+    if(lightningT>0){ lightningT-=dt; if(lightningT<=0)$('lightningFlash').style.opacity=0; }
+    else if(lightningCd<=0){
+      lightningT=0.14; lightningCd=rand(3.5,9);
+      const el=$('lightningFlash'); if(el)el.style.opacity=rand(0.55,0.9);
+    }
+  }
+}
+
 function buildWorld(){
   disposeWorld();
   applyGfx();
   scene=new THREE.Scene();
-  trackCur=TRACKS[sel.track]; const th=trackCur.theme;
+  trackCur=TRACKS[sel.track]; const th=applyWeather(applyTimeOfDay(trackCur.theme,timeOfDay),weather);
+  const fogMul=WEATHER_DEFS[weather].fogMul;
   scene.background=new THREE.Color(th.fog);
-  scene.fog=new THREE.Fog(new THREE.Color(th.fog), th.night?70:200, th.night?720:1500);
+  scene.fog=new THREE.Fog(new THREE.Color(th.fog), (th.night?70:200)*fogMul, (th.night?720:1500)*fogMul);
   const boost=gfx.hq?1.22:1;
   scene.add(new THREE.HemisphereLight(th.night?0x3a4470:0xcfe4ff, th.night?0x11131c:0x55603f,
     (th.night?0.55:0.8)*boost));
@@ -1362,6 +1472,7 @@ function buildWorld(){
     tvSpots.push(new THREE.Vector3(td.p[i].x+td.n[i].x*21,7,td.p[i].z+td.n[i].z*21));
   }
   spawnCars();
+  weatherFX=buildWeatherFX(weather);
   // bornes minimap
   let mnx=1e9,mxx=-1e9,mnz=1e9,mxz=-1e9;
   td.p.forEach(p=>{mnx=Math.min(mnx,p.x);mxx=Math.max(mxx,p.x);mnz=Math.min(mnz,p.z);mxz=Math.max(mxz,p.z);});
@@ -1541,11 +1652,12 @@ function physPlayer(car,dt){
   if(car.finished){gas=false;brk=car.speed>2;}
   const st=(inp.axis!=null)?clamp(inp.axis,-1,1):((inp.left?1:0)-(inp.right?1:0));
   car.steer=lerp(car.steer,st,Math.min(1,10*dt));
-  if(gas) car.speed+=30*(car.fuel<=0?0.25:1)*(1-car.speed/TOP)*dt;
+  const accelGrip=0.6+0.4*weatherGrip, brakeGrip=0.55+0.45*weatherGrip;
+  if(gas) car.speed+=30*accelGrip*(car.fuel<=0?0.25:1)*(1-car.speed/TOP)*dt;
   else if(car.speed>0) car.speed=Math.max(car.speed-6*dt,0);
   else if(car.speed<0) car.speed=Math.min(car.speed+8*dt,0);
   if(brk){
-    if(car.speed>0.5) car.speed=Math.max(car.speed-72*dt,0);
+    if(car.speed>0.5) car.speed=Math.max(car.speed-72*brakeGrip*dt,0);
     else car.speed=Math.max(car.speed-8*dt,-9);
   }
   if(car.fuel<=0&&car.speed>16) car.speed=Math.max(16,car.speed-24*dt);
@@ -1577,7 +1689,7 @@ function physAI(car,dt){
     car.liftT=0;car.liftCd=rand(3,9);}
 
   const pace=1+0.02*Math.sin(performance.now()*0.001*car.pfr+car.pph);
-  const topV=TOP*car.skill*pace;
+  const topV=TOP*car.skill*pace*(0.9+0.1*weatherGrip);
 
   if(!car.pitting&&!car.finished&&car.fuel<0.22) car.pitting=true;
 
@@ -1651,12 +1763,14 @@ function physAI(car,dt){
   car.steer=clamp(diff*2.6,-1,1);
 
   // vitesse cible : anticipation de freinage réaliste sur les virages à venir
+  // (l'IA tient compte de l'adhérence météo : moins de grip → virages négociés
+  // plus lentement et freinage anticipé plus tôt, exactement comme un vrai pilote)
   let target=topV;
-  const decel=44;
+  const decel=44*(0.6+0.4*weatherGrip);
   const maxLook=Math.ceil(((car.speed+10)*(car.speed+10))/(2*decel)/td.ds)+3;
   for(let k=0;k<=maxLook;k+=2){
     const j=(car.idx+k)%N;
-    const vc=cornerV(td.c[j],car.ck);
+    const vc=cornerV(td.c[j],car.ck*weatherGrip);
     if(vc>=topV)continue;
     const allow=Math.sqrt(vc*vc+2*decel*k*td.ds)*0.94; // petite marge de sécurité
     if(allow<target)target=allow;
@@ -1687,7 +1801,7 @@ function physAI(car,dt){
   if(car.fuel<=0) target=Math.min(target,14);
   target=Math.max(target,0);
 
-  const accelRate=car.ovT>0?38:30;
+  const accelRate=(car.ovT>0?38:30)*(0.65+0.35*weatherGrip);
   if(car.speed<target-0.5) car.speed+=accelRate*(1-car.speed/Math.max(topV,1))*dt;
   else car.speed=Math.max(car.speed-decel*dt,target);
   car.thr=car.speed<target?1:0;
@@ -1698,8 +1812,15 @@ function moveCar(car,dt){
   if(state==='race'&&!car.finished){
     car.fuel=Math.max(0,car.fuel-dt*(0.3+0.7*Math.abs(car.speed)/TOP)*(car.thr?1:0.45)/car.tank);
   }
-  car.pos.x+=Math.sin(car.heading)*car.speed*dt;
-  car.pos.z+=Math.cos(car.heading)*car.speed*dt;
+  // adhérence météo : sur piste mouillée/enneigée, la trajectoire réelle (velHeading)
+  // retarde sur le cap visuel de la voiture (car.heading) — c'est le glissement.
+  // Par beau temps (weatherGrip=1) le retard est nul : comportement inchangé.
+  if(car.velHeading==null)car.velHeading=car.heading;
+  const cornerLoad=clamp(Math.abs(car.steer)*Math.abs(car.speed)/TOP*2.2,0,1); // 0=ligne droite/lent, 1=plein virage à vive allure
+  const catchUp=lerp(16,16*weatherGrip*weatherGrip*weatherGrip,cornerLoad);
+  car.velHeading+=wrapPI(car.heading-car.velHeading)*Math.min(1,catchUp*dt);
+  car.pos.x+=Math.sin(car.velHeading)*car.speed*dt;
+  car.pos.z+=Math.cos(car.velHeading)*car.speed*dt;
   trackSense(car); surface(car,dt);
   car.mesh.position.set(car.pos.x,0.12,car.pos.z);
   car.mesh.rotation.y=car.heading;
@@ -1962,7 +2083,10 @@ function handleRaceMsg(peerId,raw){
   if(m.t==='hello'||m.t==='team'||m.t==='cfg'){
     mate.team=m.team;
     if(m.name)mate.name=String(m.name).slice(0,15);
-    if(m.t==='cfg'&&mate.isHost&&net.role==='guest'){ sel.track=m.track; sel.laps=m.laps; }
+    if(m.t==='cfg'&&mate.isHost&&net.role==='guest'){
+      sel.track=m.track; sel.laps=m.laps;
+      if(m.weather)sel.weather=m.weather; if(m.tod)sel.tod=m.tod;
+    }
     if(state==='menu')refreshMenu();
   }else if(m.t==='go'&&net.role==='guest'&&state==='menu'){
     initAudio(); if(AC)AC.resume(); startRace();
@@ -2284,7 +2408,7 @@ function bindDC(dc){
       :"Choisis ton écurie — l'hôte va lancer la course."));
     sendToMates({t:'hello',team:sel.team,name:dispName()});
     if(net.role==='host'){
-      sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName()});
+      sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName(),weather:sel.weather,tod:sel.tod});
     }
     refreshMenu();
   };
@@ -2402,7 +2526,7 @@ async function applyRemoteCode(){
 }
 function sendCfgIfHost(){
   if(online&&net.role==='host'&&net.connected){
-    sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName()});
+    sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName(),weather:sel.weather,tod:sel.tod});
   }
 }
 function sendTeam(){
@@ -2487,14 +2611,13 @@ function step(dt){
     if(anim.wheel)anim.wheel.rotation.z+=0.12*dt;
     if(anim.sphere)anim.sphere.rotation.y+=0.1*dt;
   }
-  if(worldSun&&gfx.shadows){
-    const sc=cine?(cars[cineIdx]||cars[0]):player;
-    if(sc){
-      worldSun.position.set(sc.pos.x+sunDir.x*300,sunDir.y*300,sc.pos.z+sunDir.z*300);
-      worldSun.target.position.set(sc.pos.x,0,sc.pos.z);
-      worldSun.target.updateMatrixWorld();
-    }
+  const spectated=cine?(cars[cineIdx]||cars[0]):player;
+  if(worldSun&&gfx.shadows&&spectated){
+    worldSun.position.set(spectated.pos.x+sunDir.x*300,sunDir.y*300,spectated.pos.z+sunDir.z*300);
+    worldSun.target.position.set(spectated.pos.x,0,spectated.pos.z);
+    worldSun.target.updateMatrixWorld();
   }
+  updateWeatherFX(dt,spectated);
   updateCamera(dt);
   updateHUD();
   updateAudio();
@@ -2739,6 +2862,22 @@ function buildMenu(){
     };
     $('diffRow').appendChild(b);
   });
+  const setWeather=w=>{
+    if(online&&net.role==='guest'&&net.connected)return;
+    sel.weather=w;refreshMenu();sendCfgIfHost();
+  };
+  $('wSunChip').onclick=()=>setWeather('sun');
+  $('wRainChip').onclick=()=>setWeather('rain');
+  $('wStormChip').onclick=()=>setWeather('storm');
+  $('wSnowChip').onclick=()=>setWeather('snow');
+  $('wRandomChip').onclick=()=>setWeather('random');
+  const setTod=t=>{
+    if(online&&net.role==='guest'&&net.connected)return;
+    sel.tod=t;refreshMenu();sendCfgIfHost();
+  };
+  $('todMorningChip').onclick=()=>setTod('morning');
+  $('todDayChip').onclick=()=>setTod('day');
+  $('todNightChip').onclick=()=>setTod('night');
   $('arrowsChip').onclick=()=>{sel.ctrl='arrows';refreshMenu();};
   $('wheelChip').onclick=()=>{sel.ctrl='wheel';refreshMenu();};
   $('shadowChip').onclick=()=>{gfx.shadows=!gfx.shadows;refreshMenu();};
@@ -2840,7 +2979,10 @@ function buildMenu(){
     if(sel.net){
       if(net.role==='guest'){netStatus("C'est l'hôte qui lance la course — attends le départ !");return false;}
       if(!net.connected||raceMates.length===0){netStatus('Invite au moins un joueur avant de lancer (voir plus haut).');return false;}
-      sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName()});
+      // "aléatoire" est tiré une seule fois par l'hôte et transmis déjà résolu,
+      // pour que tout le monde coure sous exactement la même météo.
+      pendingWeather=sel.weather==='random'?WEATHER_ORDER[randi(WEATHER_ORDER.length)]:sel.weather;
+      sendToMates({t:'cfg',track:sel.track,laps:sel.laps,team:sel.team,name:dispName(),weather:pendingWeather,tod:sel.tod});
       sendToMates({t:'go'});
     }
     startRace();
@@ -2869,6 +3011,19 @@ function refreshMenu(){
   $('oppV').textContent=sel.opp;
   [...$('diffRow').children].forEach((el,i)=>el.classList.toggle('sel',i===sel.diff));
   $('diffName').textContent=DIFFS[sel.diff].n;
+  $('wSunChip').classList.toggle('sel',sel.weather==='sun');
+  $('wRainChip').classList.toggle('sel',sel.weather==='rain');
+  $('wStormChip').classList.toggle('sel',sel.weather==='storm');
+  $('wSnowChip').classList.toggle('sel',sel.weather==='snow');
+  $('wRandomChip').classList.toggle('sel',sel.weather==='random');
+  $('weatherName').textContent=sel.weather==='random'?'🎲 ALÉATOIRE':WEATHER_DEFS[sel.weather].icon+' '+WEATHER_DEFS[sel.weather].label;
+  $('weatherHint').textContent=sel.weather==='sun'
+    ?'Piste sèche — adhérence maximale.'
+    :'Adhérence réduite : les voitures (y compris les IA) glissent dans les virages. Les IA en tiennent compte et roulent plus prudemment.';
+  $('todMorningChip').classList.toggle('sel',sel.tod==='morning');
+  $('todDayChip').classList.toggle('sel',sel.tod==='day');
+  $('todNightChip').classList.toggle('sel',sel.tod==='night');
+  $('todName').textContent=sel.tod==='morning'?'MATIN':sel.tod==='night'?'NUIT':'JOURNÉE';
   $('arrowsChip').classList.toggle('sel',sel.ctrl==='arrows');
   $('wheelChip').classList.toggle('sel',sel.ctrl==='wheel');
   $('ctrlName').textContent=sel.ctrl==='wheel'?'VOLANT':'FLÈCHES';
@@ -2899,7 +3054,7 @@ function refreshMenu(){
     (sel.net&&net.role==='guest')?"EN ATTENTE DE L'HÔTE…":(sel.cine?'LANCER LA CINÉMATIQUE':'LANCER LA COURSE');
   if(sel.mp&&sel.opp>8){sel.opp=8;$('oppV').textContent=8;}
   const guestLocked=sel.net&&net.role==='guest'&&net.connected;
-  ['modeBlk','trackBlk','stepBlk','diffBlk'].forEach(id=>$(id).classList.toggle('netLocked',guestLocked));
+  ['modeBlk','trackBlk','stepBlk','diffBlk','weatherBlk','todBlk'].forEach(id=>$(id).classList.toggle('netLocked',guestLocked));
   $('netLockNote').classList.toggle('show',guestLocked);
   $('startBtn').style.opacity=(sel.net&&net.role==='guest')?0.55:1;
   $('chatBox').hidden=!net.connected;
@@ -2913,6 +3068,10 @@ function startRace(){
   online=sel.net;
   mp=sel.mp&&!online;
   cine=sel.cine&&!online&&!mp;
+  weather=pendingWeather||(sel.weather==='random'?WEATHER_ORDER[randi(WEATHER_ORDER.length)]:sel.weather);
+  pendingWeather=null;
+  weatherGrip=WEATHER_DEFS[weather].grip;
+  timeOfDay=sel.tod;
   if(mp&&sel.opp>8)sel.opp=8;
   document.body.classList.toggle('mp',mp);
   document.body.classList.toggle('online',online);
