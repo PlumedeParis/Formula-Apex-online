@@ -253,6 +253,14 @@ body.cine #touchL2,body.cine #touchR2{display:none}
 #serverHint.show{display:block}
 #cineHint{display:none;font-size:11px;color:var(--mut);margin-top:8px}
 #cineHint.show{display:block}
+#tournHint{display:none;font-size:11px;color:var(--mut);margin-top:8px}
+#tournHint.show{display:block}
+#tournTable{width:100%;border-collapse:collapse;font-size:12.5px;margin:6px 0 4px}
+#tournTable td{padding:5px 4px;border-bottom:1px solid var(--line)}
+#tournTable tr.me td{color:var(--yel);font-weight:700}
+#tournTable .pp{font-family:'Racing Sans One',sans-serif;font-style:italic;font-size:14px;width:26px}
+#tournTable .pts{text-align:right;color:var(--mut);white-space:nowrap;font-weight:700}
+#tournTable .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:-1px}
 @keyframes unlockPulse{0%{box-shadow:0 0 0 0 rgba(32,231,255,.7)}70%{box-shadow:0 0 0 16px rgba(32,231,255,0)}100%{box-shadow:0 0 0 0 rgba(32,231,255,0)}}
 .chip.unlockPulse{animation:unlockPulse .9s ease-out 2}
 #netBox{--cut:14px;background:var(--panel);border:1px solid var(--line);padding:14px;margin-top:10px;
@@ -419,7 +427,7 @@ body.noTouch #kbHint{display:block}
 <div id="menu">
   <canvas id="menuBg"></canvas>
   <div id="menuVignette"></div>
-  <div id="verBadge" title="Version">v2.0 · 12/07/2026</div>
+  <div id="verBadge" title="Version">v2.1 · 12/07/2026</div>
   <div class="wrap">
     <div class="hero">
       <div class="season">26</div>
@@ -435,11 +443,13 @@ body.noTouch #kbHint{display:block}
       <button class="chip" id="duoChip">👥&nbsp;2 JOUEURS · ÉCRAN PARTAGÉ</button>
       <button class="chip" id="netChip">🌐&nbsp;EN LIGNE · DUEL</button>
       <button class="chip" id="serverChip">🛰️&nbsp;EN LIGNE · SERVEUR</button>
+      <button class="chip" id="tournChip">🏆&nbsp;CHAMPIONNAT</button>
       <button class="chip" id="cineChip" hidden>🎬&nbsp;CINÉMATIQUE</button>
     </div>
     </div>
     <div id="serverHint">Passe par un serveur relais au lieu du direct — plus lent, mais marche même en 4G ou sur les réseaux les plus restrictifs. Pas de micro dans ce mode.</div>
     <div id="duoHint">Même clavier — Joueur 1 : ZQSD / WASD · Joueur 2 : flèches. Le joueur 2 reçoit automatiquement l'écurie suivante.</div>
+    <div id="tournHint">10 tours sur chacun des 11 circuits, dans l'ordre. À l'arrivée de chaque course, un classement cumulé (points façon F1 : 25-18-15-12-10-8-6-4-2-1) s'affiche et tu enchaînes directement sur la course suivante.</div>
     <div id="cineHint">Mode réalisateur — zéro voiture jouable : 10 IA se disputent la course en boucle, la caméra suit celle de ton choix. Pendant la course : ⏮/⏭ ou ← → pour changer de voiture suivie, C/V pour changer d'angle. Idéal pour filmer des vidéos.</div>
     <div id="netBox" hidden>
       <label class="netLbl" style="margin-top:0">TON PSEUDO — affiché en hologramme au-dessus de ta voiture</label>
@@ -505,7 +515,7 @@ body.noTouch #kbHint{display:block}
     </div>
 
     <div id="stepBlk" class="steppers">
-      <div class="step"><span class="lbl">TOURS</span>
+      <div class="step" id="lapsBlk"><span class="lbl">TOURS</span>
         <div class="ctr"><button id="lapM">−</button><b id="lapV">3</b><button id="lapP">+</button></div></div>
       <div class="step" id="oppBlk"><span class="lbl">ADVERSAIRES</span>
         <div class="ctr"><button id="oppM">−</button><b id="oppV">9</b><button id="oppP">+</button></div></div>
@@ -620,8 +630,14 @@ body.noTouch #kbHint{display:block}
 
   <div id="finish" class="ovl" hidden>
     <div class="panel">
-      <h2>🏁 <em>ARRIVÉE</em></h2>
+      <h2 id="finishTitle">🏁 <em>ARRIVÉE</em></h2>
+      <div id="tournRound" class="hint" style="margin:-8px 0 10px;text-align:left" hidden></div>
       <table id="resTable"></table>
+      <div id="tournStandingsBox" hidden>
+        <label class="netLbl" style="margin-top:12px">🏆 CLASSEMENT CHAMPIONNAT</label>
+        <table id="tournTable"></table>
+      </div>
+      <button class="obtn prim" id="nextRaceBtn" hidden>🏁 PROCHAINE COURSE</button>
       <button class="obtn prim" id="againBtn">REJOUER</button>
       <button class="obtn" id="menuBtn">RETOUR AU MENU</button>
     </div>
@@ -1375,7 +1391,11 @@ const isTouch=('ontouchstart' in window);
 const gfx={shadows:!isTouch, hq:true, bright:1};
 const DIFFS=[{n:'FACILE',mul:0.90},{n:'NORMAL',mul:0.97},{n:'DIFFICILE',mul:1.03},{n:'IMPOSSIBLE',mul:1.10}];
 const camPos=new THREE.Vector3(), camPos2=new THREE.Vector3(), camLook=new THREE.Vector3();
-const sel={track:0,team:0,laps:3,opp:9,diff:1,mp:false,net:false,netMode:'p2p',ctrl:'arrows',cine:false,weather:'sun',tod:'day'};
+const sel={track:0,team:0,laps:3,opp:9,diff:1,mp:false,net:false,netMode:'p2p',ctrl:'arrows',cine:false,weather:'sun',tod:'day',tourn:false};
+/* ---------- championnat : 10 tours sur chaque circuit, dans l'ordre, classement cumulé ---------- */
+const TOURN_LAPS=10;
+const F1_POINTS=[25,18,15,12,10,8,6,4,2,1];
+let tournActive=false, tournIdx=0, tournStandings=null, tournLapsBackup=3;
 /* ---------- météo & heure : conditions de course ---------- */
 const WEATHER_DEFS={
   sun:  {icon:'☀️', label:'SOLEIL', grip:1.00, fogMul:1.0,  tint:null,      tintAmt:0},
@@ -1790,6 +1810,11 @@ function physAI(car,dt){
         if(car.pitT>=3){car.fuel=1;car.pitting=false;car.pitT=0;}
       }
     }
+    // ne pas foncer dans une voiture déjà ralentie/arrêtée devant, dans la voie des stands
+    // (sans ça les IA qui pitent en même temps se rentrent dedans en approche/à l'arrêt)
+    if(ahead&&aAlong<12&&Math.abs(aSide)<3.5){
+      target=Math.min(target,Math.max(ahead.speed-1,0));
+    }
   }else{
     // suivre sagement la voiture devant si on ne la double pas activement
     if(car.ovT<=0&&ahead&&aAlong<16){
@@ -2004,6 +2029,36 @@ function playerFinished(){
     hudEls.finish.hidden=false;
     const guestOnline=online&&net.role==='guest';
     $('againBtn').style.display=guestOnline?'none':'';
+
+    if(tournActive){
+      rank.forEach((c,i)=>{
+        const key=c.isPlayer?'__PLAYER__':c.name;
+        if(!tournStandings[key])tournStandings[key]={name:c.isPlayer?dispName():c.name,team:c.team,isPlayer:c.isPlayer,pts:0};
+        tournStandings[key].pts+=F1_POINTS[i]||0;
+      });
+      const isLastTrack=tournIdx>=TRACKS.length-1;
+      $('finishTitle').innerHTML=isLastTrack?'🏆 <em>CHAMPIONNAT TERMINÉ</em>':'🏁 <em>ARRIVÉE</em>';
+      $('tournRound').hidden=false;
+      $('tournRound').textContent='MANCHE '+(tournIdx+1)+'/'+TRACKS.length+' — '+TRACKS[sel.track].name;
+      const standingsSorted=Object.values(tournStandings).sort((a,b)=>b.pts-a.pts);
+      let sHtml='';
+      standingsSorted.forEach((s,i)=>{
+        sHtml+='<tr class="'+(s.isPlayer?'me':'')+'"><td class="pp">'+(i+1)+'</td>'+
+          '<td><span class="dot" style="background:#'+s.team.c.toString(16).padStart(6,'0')+'"></span>'+s.name+'</td>'+
+          '<td class="pts">'+s.pts+' pts</td></tr>';
+      });
+      $('tournTable').innerHTML=sHtml;
+      $('tournStandingsBox').hidden=false;
+      $('nextRaceBtn').hidden=guestOnline||isLastTrack;
+      $('againBtn').style.display='none';
+      $('menuBtn').textContent=isLastTrack?'RETOUR AU MENU':'ABANDONNER LE CHAMPIONNAT';
+    }else{
+      $('finishTitle').innerHTML='🏁 <em>ARRIVÉE</em>';
+      $('tournRound').hidden=true;
+      $('tournStandingsBox').hidden=true;
+      $('nextRaceBtn').hidden=true;
+      $('menuBtn').textContent='RETOUR AU MENU';
+    }
   },1600);
 }
 
@@ -2776,6 +2831,12 @@ $('againBtn').onclick=()=>{
   if(online){tryLaunch();}else{startRace();}
 };
 $('menuBtn').onclick=()=>{hudEls.finish.hidden=true;quitToMenu();};
+$('nextRaceBtn').onclick=()=>{
+  hudEls.finish.hidden=true;
+  tournIdx++;
+  sel.track=tournIdx;
+  startRace();
+};
 function quitToMenu(fromNet){
   if(!fromNet && online && net.connected){
     sendToMates({t:'menu'});
@@ -2858,7 +2919,7 @@ function buildMenu(){
   };
   $('lapP').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.laps=Math.min(10,sel.laps+1);refreshMenu();sendCfgIfHost();
+    sel.laps=Math.min(60,sel.laps+1);refreshMenu();sendCfgIfHost();
   };
   $('oppM').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
@@ -2899,25 +2960,29 @@ function buildMenu(){
   $('hqChip').onclick=()=>{gfx.hq=!gfx.hq;refreshMenu();};
   $('soloChip').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.mp=false;sel.net=false;sel.cine=false;refreshMenu();saveNetPrefs();
+    sel.mp=false;sel.net=false;sel.cine=false;sel.tourn=false;refreshMenu();saveNetPrefs();
   };
   $('duoChip').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.mp=true;sel.net=false;sel.cine=false;refreshMenu();saveNetPrefs();
+    sel.mp=true;sel.net=false;sel.cine=false;sel.tourn=false;refreshMenu();saveNetPrefs();
   };
   $('netChip').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.mp=false;sel.net=true;sel.netMode='p2p';sel.cine=false;refreshMenu();saveNetPrefs();
+    sel.mp=false;sel.net=true;sel.netMode='p2p';sel.cine=false;sel.tourn=false;refreshMenu();saveNetPrefs();
     ensureLobby();
   };
   $('serverChip').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.mp=false;sel.net=true;sel.netMode='server';sel.cine=false;refreshMenu();saveNetPrefs();
+    sel.mp=false;sel.net=true;sel.netMode='server';sel.cine=false;sel.tourn=false;refreshMenu();saveNetPrefs();
     ensureServerLobby();
   };
   $('cineChip').onclick=()=>{
     if(online&&net.role==='guest'&&net.connected)return;
-    sel.mp=false;sel.net=false;sel.cine=true;refreshMenu();saveNetPrefs();
+    sel.mp=false;sel.net=false;sel.cine=true;sel.tourn=false;refreshMenu();saveNetPrefs();
+  };
+  $('tournChip').onclick=()=>{
+    if(online&&net.role==='guest'&&net.connected)return;
+    sel.mp=false;sel.net=false;sel.cine=false;sel.tourn=true;refreshMenu();saveNetPrefs();
   };
   let verTapN=0,verTapT=null;
   $('verBadge').addEventListener('click',()=>{
@@ -2991,6 +3056,7 @@ function buildMenu(){
   $('startBtn').onclick=()=>tryLaunch();
   window.tryLaunch=function tryLaunch(){
     initAudio(); if(AC)AC.resume();
+    if(sel.tourn){ tournIdx=0; sel.track=0; tournStandings={}; }
     if(sel.net){
       if(net.role==='guest'){netStatus("C'est l'hôte qui lance la course — attends le départ !");return false;}
       if(!net.connected||raceMates.length===0){netStatus('Invite au moins un joueur avant de lancer (voir plus haut).');return false;}
@@ -3046,18 +3112,22 @@ function refreshMenu(){
   $('shadowChip').classList.toggle('sel',gfx.shadows);
   $('hqChip').classList.toggle('sel',gfx.hq);
   $('gfxName').textContent=(gfx.hq?'HD':'RAPIDE')+(gfx.shadows?' + OMBRES':'');
-  $('soloChip').classList.toggle('sel',!sel.mp&&!sel.net&&!sel.cine);
+  $('soloChip').classList.toggle('sel',!sel.mp&&!sel.net&&!sel.cine&&!sel.tourn);
   $('duoChip').classList.toggle('sel',sel.mp);
   $('netChip').classList.toggle('sel',sel.net&&sel.netMode==='p2p');
   $('serverChip').classList.toggle('sel',sel.net&&sel.netMode==='server');
   $('cineChip').classList.toggle('sel',sel.cine);
-  $('modeName').textContent=sel.cine?'🎬 CINÉMATIQUE':(sel.net?(sel.netMode==='server'?'EN LIGNE · SERVEUR':'EN LIGNE'):(sel.mp?'2 JOUEURS':'SOLO'));
+  $('tournChip').classList.toggle('sel',sel.tourn);
+  $('modeName').textContent=sel.cine?'🎬 CINÉMATIQUE':sel.tourn?'🏆 CHAMPIONNAT':(sel.net?(sel.netMode==='server'?'EN LIGNE · SERVEUR':'EN LIGNE'):(sel.mp?'2 JOUEURS':'SOLO'));
   $('duoHint').classList.toggle('show',sel.mp);
   $('serverHint').classList.toggle('show',sel.net&&sel.netMode==='server');
   $('cineHint').classList.toggle('show',sel.cine);
+  $('tournHint').classList.toggle('show',sel.tourn);
   $('teamBlk').hidden=sel.cine;
   $('oppBlk').hidden=sel.cine;
   $('ctrlBlk').hidden=sel.cine;
+  $('trackBlk').hidden=sel.tourn;
+  $('lapsBlk').hidden=sel.tourn;
   $('netBox').hidden=!sel.net;
   const inServerMode=sel.net&&sel.netMode==='server';
   document.querySelectorAll('.p2pOnly').forEach(el=>{
@@ -3066,7 +3136,7 @@ function refreshMenu(){
     else{ el.hidden=inServerMode; }
   });
   $('startBtn').querySelector('span').textContent=
-    (sel.net&&net.role==='guest')?"EN ATTENTE DE L'HÔTE…":(sel.cine?'LANCER LA CINÉMATIQUE':'LANCER LA COURSE');
+    (sel.net&&net.role==='guest')?"EN ATTENTE DE L'HÔTE…":(sel.cine?'LANCER LA CINÉMATIQUE':sel.tourn?'LANCER LE CHAMPIONNAT':'LANCER LA COURSE');
   if(sel.mp&&sel.opp>23){sel.opp=23;$('oppV').textContent=23;}
   const guestLocked=sel.net&&net.role==='guest'&&net.connected;
   ['modeBlk','trackBlk','stepBlk','diffBlk','weatherBlk','todBlk'].forEach(id=>$(id).classList.toggle('netLocked',guestLocked));
@@ -3078,11 +3148,12 @@ function refreshMenu(){
 }
 
 function startRace(){
-  lapsTotal=sel.laps;
-  AIC=[0.8,0.9,1.0,1.06][sel.diff];
   online=sel.net;
   mp=sel.mp&&!online;
   cine=sel.cine&&!online&&!mp;
+  tournActive=sel.tourn&&!online&&!mp&&!cine;
+  lapsTotal=tournActive?TOURN_LAPS:sel.laps;
+  AIC=[0.8,0.9,1.0,1.06][sel.diff];
   weather=pendingWeather||(sel.weather==='random'?WEATHER_ORDER[randi(WEATHER_ORDER.length)]:sel.weather);
   pendingWeather=null;
   weatherGrip=WEATHER_DEFS[weather].grip;
