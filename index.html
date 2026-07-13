@@ -428,7 +428,7 @@ body.noTouch #kbHint{display:block}
 <div id="menu">
   <canvas id="menuBg"></canvas>
   <div id="menuVignette"></div>
-  <div id="verBadge" title="Version">v2.9 · 13/07/2026</div>
+  <div id="verBadge" title="Version">v3.0 · 13/07/2026</div>
   <div class="wrap">
     <div class="hero">
       <div class="season">26</div>
@@ -1771,18 +1771,17 @@ function physPlayer(car,dt){
   const inp=car.inp||input;
   let gas=inp.gas, brk=inp.brk;
   if(car.finished){gas=false;brk=car.speed>2;}
-  let st;
+  let st, autoDiff=0;
   if(car.autopilot){
     // pilote auto (Multivan uniquement, en solo) : vise un point sur l'axe de la piste
-    // devant la voiture, exactement comme une IA — seuls le gaz et le frein restent
-    // au joueur, la direction tourne toute seule pour suivre chaque virage parfaitement.
-    // Visée plus courte et gain plus élevé qu'une IA classique pour rester précis même
-    // en pleine décélération d'un freinage à 500 km/h vers un virage serré.
-    const lookDist=clamp(5+Math.abs(car.speed)*0.3,6,45);
+    // devant la voiture — le joueur garde la main sur le gaz/frein, la direction tourne
+    // toute seule. Ne ralentit jamais dans les virages (cf. mise à jour du cap plus bas,
+    // qui tourne "à fond" au lieu de suivre le taux de virage normal).
+    const lookDist=clamp(2+Math.abs(car.speed)*0.04,3,8);
     const ah=Math.max(2,Math.round(lookDist/td.ds));
     const j2=(car.idx+ah)%N;
-    const diff=wrapPI(Math.atan2(td.p[j2].x-car.pos.x,td.p[j2].z-car.pos.z)-car.heading);
-    st=clamp(diff*3.4,-1,1);
+    autoDiff=wrapPI(Math.atan2(td.p[j2].x-car.pos.x,td.p[j2].z-car.pos.z)-car.heading);
+    st=clamp(autoDiff*3.4,-1,1);
   }else{
     st=(inp.axis!=null)?clamp(inp.axis,-1,1):((inp.left?1:0)-(inp.right?1:0));
   }
@@ -1799,26 +1798,6 @@ function physPlayer(car,dt){
     if(car.speed>0.5) car.speed=Math.max(car.speed-72*brakeGrip*dt,0);
     else car.speed=Math.max(car.speed-8*dt,-9);
   }
-  if(car.autopilot&&car.speed>0){
-    // gouverneur de vitesse du pilote auto : anticipe les virages à venir (comme une IA)
-    // et freine tout seul si besoin pour ne jamais sortir de piste — sans jamais faire
-    // avancer la voiture toute seule : sans gaz elle continue de ralentir normalement ci-dessus.
-    let safeV=top;
-    const decel=450;
-    const maxLook=Math.ceil(((car.speed+10)*(car.speed+10))/(2*decel)/td.ds)+3;
-    for(let k=0;k<=maxLook;k+=1){
-      const j=(car.idx+k)%N;
-      // le paramètre de grip (<1, au lieu de 1) resserre le plafond des virages sans
-      // toucher aux lignes droites (où cornerVTop renvoie "top" quel que soit ce
-      // paramètre) : sans cette marge, les virages tout juste "à la limite théorique"
-      // n'étaient jamais repérés comme un point à ralentir et finissaient par frôler le mur.
-      const vc=cornerVTop(td.c[j],0.72,top);
-      if(vc>=safeV)continue;
-      const allow=Math.sqrt(vc*vc+2*decel*k*td.ds)*0.35;
-      if(allow<safeV)safeV=allow;
-    }
-    if(car.speed>safeV) car.speed=Math.max(safeV,car.speed-1100*dt);
-  }
   if(!cheat&&car.fuel<=0&&car.speed>16) car.speed=Math.max(16,car.speed-24*dt);
   // ravitaillement : à l'arrêt sur la bande bleue des stands pendant 3 s (le Multivan a l'essence infinie)
   if(!cheat&&!car.finished&&inPitZone(car)&&Math.abs(car.speed)<0.8&&car.fuel<0.985){
@@ -1827,16 +1806,16 @@ function physPlayer(car,dt){
   }else if(!cheat) car.pitT=0;
   car.thr=gas?1:0;
   const dir=car.speed<0?-1:1;
-  car.heading+=car.steer*yawMax(Math.abs(car.speed),top)*dt*dir;
+  if(car.autopilot){
+    // taux de virage "à fond" pour le pilote auto : largement au-delà du plafond normal
+    // (yawMax, qui réduit la maniabilité avec la vitesse) — il n'a donc jamais besoin de
+    // ralentir dans un virage, même très serré, quelle que soit sa vitesse.
+    car.heading+=clamp(autoDiff,-16*dt,16*dt)*dir;
+  }else{
+    car.heading+=car.steer*yawMax(Math.abs(car.speed),top)*dt*dir;
+  }
 }
 
-// variante de cornerV paramétrée par la vitesse de pointe du véhicule (au lieu du
-// TOP=80 des monoplaces en dur) — utilisée par le gouverneur du pilote auto du
-// Multivan, dont la pointe (CHEAT_TOP=139) est bien plus haute que TOP.
-function cornerVTop(c,k,vtop){
-  if(c<0.0012) return vtop;
-  return Math.min(vtop, 2.645*k/(c+1.265*k/vtop));
-}
 function cornerV(c,k){
   // vitesse max de virage compatible avec yawMax : v*c = k*2.3*(1.15-0.55*v/TOP)
   if(c<0.0012) return TOP;
